@@ -70,3 +70,10 @@ swagger:
     enabled: false                                          # 是否开启
     service-id-regex: .*-service-.*                         # 微服务ID正则，匹配的微服务收集swagger
 ```
+
+3. `WebFlux` 项目需要额外配置
+
+```yml
+server:
+  forward-headers-strategy: framework
+```
