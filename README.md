@@ -50,7 +50,7 @@ swagger:
   contact-name: tony                                        # 接口维护人姓名
   contact-email: tony@stark.com                             # 接口维护人电子邮件
   license: Apache 2.0                                       # 证书名称
-  license-url: ttp://www.apache.org/licenses/LICENSE-2.0    # 证书链接地址
+  license-url: http://www.apache.org/licenses/LICENSE-2.0    # 证书链接地址
   vendor-extensions:                                        # 额外功能扩展
   index-redirect: true                                      # 是否将首页 {"/", "/index"} 重定向到 swagger 接口文档页
   oauth2:                                                   # oauth2登录配置
