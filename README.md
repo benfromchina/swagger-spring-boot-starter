@@ -32,7 +32,7 @@
 
 ```xml
 <dependency>
-    <groupId>com.github.benfromchina</groupId>
+    <groupId>io.github.benfromchina</groupId>
     <artifactId>swagger-spring-boot-starter</artifactId>
     <version>1.0.0</version>
 </dependency>
