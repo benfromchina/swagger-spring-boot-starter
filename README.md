@@ -16,15 +16,15 @@
 
 - Spring Boot 单体应用
 
-  <img src="docs/lib/standalone.png" width="1440" height="818">
+  <img src="docs/lib/standalone.png" width="864" height="491">
 
 - Zuul 或 Gateway 网关收集微服务接口
   
-  <img src="docs/lib/gateway.png" width="1439" height="815">
+  <img src="docs/lib/gateway.png" width="864" height="491">
   
 - OAuth2.0 登录
   
-  <img src="docs/lib/oauth2.png" width="1438" height="817">
+  <img src="docs/lib/oauth2.png" width="864" height="491">
 
 
 # 配置
