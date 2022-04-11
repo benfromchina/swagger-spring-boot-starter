@@ -81,3 +81,54 @@ swagger:
 server:
   forward-headers-strategy: framework
 ```
+
+4. 资源服务器安全配置
+
+    - Zuul 作为资源服务器
+
+    ```java
+    @Configuration
+    @EnableResourceServer
+    public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
+	
+        @Autowired
+        private SwaggerProperties swaggerProperties;
+        @Autowired
+        private ZuulProperties zuulProperties;
+	
+        @Override
+        public void configure(HttpSecurity http) throws Exception {
+            http
+                .authorizeRequests()
+                    .antMatchers(SwaggerPaths.createSwaggerPatterns(swaggerProperties, zuulProperties))	// swagger 文档
+                        .permitAll();
+        }
+    
+    }
+    ```
+
+    - Gateway 作为资源服务器
+
+    ```java
+    @Configuration
+    @EnableWebFluxSecurity
+    public class ResourceServerConfig {
+	
+        @Autowired
+        private GatewayProperties gatewayProperties;
+        @Autowired
+        private GatewayExtentionProperties gatewayExtentionProperties;
+        @Autowired
+        private SwaggerProperties swaggerProperties;
+	
+        @Bean
+        SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) throws Exception {
+            http
+                .authorizeExchange()
+                    .pathMatchers(SwaggerPaths.createSwaggerPatterns(swaggerProperties, gatewayProperties, gatewayExtentionProperties))	// swagger 文档
+                        .permitAll()
+            return http.build();
+        }
+
+    }
+    ```
