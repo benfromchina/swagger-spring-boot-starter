@@ -1,6 +1,6 @@
-[![](https://img.shields.io/badge/maven%20central-v1.0.0-brightgreen)](https://repo1.maven.org/maven2/io/github/benfromchina/swagger-spring-boot-starter/1.0.0/)
-[![](https://img.shields.io/badge/release-v1.0.0-blue)](https://gitee.com/jarvis-lib/swagger-spring-boot-starter/releases/v1.0.0)
-[![](https://img.shields.io/badge/license-Apache--2.0-9cf)](https://www.apache.org/licenses/LICENSE-2.0.html)
+[![](https://img.shields.io/badge/Maven%20Central-v1.0.0-brightgreen)](https://search.maven.org/artifact/io.github.benfromchina/swagger-spring-boot-starter/1.0.0/jar)
+[![](https://img.shields.io/badge/Release-v1.0.0-blue)](https://gitee.com/jarvis-lib/swagger-spring-boot-starter/releases/v1.0.0)
+[![](https://img.shields.io/badge/License-Apache--2.0-9cf)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 # 目录
 
@@ -81,3 +81,54 @@ swagger:
 server:
   forward-headers-strategy: framework
 ```
+
+4. 资源服务器安全配置
+
+    - Zuul 作为资源服务器
+
+    ```java
+    @Configuration
+    @EnableResourceServer
+    public class ResourceServerConfig extends ResourceServerConfigurerAdapter {
+	
+        @Autowired
+        private SwaggerProperties swaggerProperties;
+        @Autowired
+        private ZuulProperties zuulProperties;
+	
+        @Override
+        public void configure(HttpSecurity http) throws Exception {
+            http
+                .authorizeRequests()
+                    .antMatchers(SwaggerPaths.createSwaggerPatterns(swaggerProperties, zuulProperties))	// swagger 文档
+                        .permitAll();
+        }
+    
+    }
+    ```
+
+    - Gateway 作为资源服务器
+
+    ```java
+    @Configuration
+    @EnableWebFluxSecurity
+    public class ResourceServerConfig {
+	
+        @Autowired
+        private GatewayProperties gatewayProperties;
+        @Autowired
+        private GatewayExtentionProperties gatewayExtentionProperties;
+        @Autowired
+        private SwaggerProperties swaggerProperties;
+	
+        @Bean
+        SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) throws Exception {
+            http
+                .authorizeExchange()
+                    .pathMatchers(SwaggerPaths.createSwaggerPatterns(swaggerProperties, gatewayProperties, gatewayExtentionProperties))	// swagger 文档
+                        .permitAll()
+            return http.build();
+        }
+
+    }
+    ```
