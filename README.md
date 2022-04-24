@@ -1,5 +1,5 @@
-[![](https://img.shields.io/badge/Maven%20Central-v1.0.0-brightgreen)](https://search.maven.org/artifact/io.github.benfromchina/swagger-spring-boot-starter/1.0.0/jar)
-[![](https://img.shields.io/badge/Release-v1.0.0-blue)](https://gitee.com/jarvis-lib/swagger-spring-boot-starter/releases/v1.0.0)
+[![](https://img.shields.io/badge/Maven%20Central-v1.0.1-brightgreen)](https://search.maven.org/artifact/io.github.benfromchina/swagger-spring-boot-starter/1.0.1/jar)
+[![](https://img.shields.io/badge/Release-v1.0.1-blue)](https://gitee.com/jarvis-lib/swagger-spring-boot-starter/releases/v1.0.1)
 [![](https://img.shields.io/badge/License-Apache--2.0-9cf)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 # 目录
@@ -38,7 +38,7 @@
 <dependency>
     <groupId>io.github.benfromchina</groupId>
     <artifactId>swagger-spring-boot-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
