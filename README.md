@@ -38,7 +38,7 @@
 <dependency>
     <groupId>io.github.benfromchina</groupId>
     <artifactId>swagger-spring-boot-starter</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
 </dependency>
 ```
 
@@ -57,6 +57,8 @@ swagger:
   license-url: http://www.apache.org/licenses/LICENSE-2.0   # 证书链接地址
   vendor-extensions:                                        # 额外功能扩展
   index-redirect: true                                      # 是否将首页 {"/", "/index"} 重定向到 swagger 接口文档页
+  referer: https://io.github.benfromchina                   # 公共的 referer 请求头
+  referer-name: Referer                                     # referer 请求头参数名
   oauth2:                                                   # oauth2登录配置
     enabled: false                                          # 是否开启
     type: password                                          # 支持 authorization_code(授权码)、password(密码)
@@ -126,7 +128,7 @@ server:
             http
                 .authorizeExchange()
                     .pathMatchers(SwaggerPaths.createSwaggerPatterns(swaggerProperties, gatewayProperties, gatewayExtentionProperties))	// swagger 文档
-                        .permitAll()
+                        .permitAll();
             return http.build();
         }
 
