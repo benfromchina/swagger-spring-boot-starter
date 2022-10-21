@@ -1,12 +1,9 @@
 package com.stark.swagger.boot.config;
 
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.List;
-import java.util.stream.Collectors;
-
+import com.stark.swagger.boot.properties.GatewayExtentionProperties;
+import com.stark.swagger.boot.properties.SwaggerProperties;
+import com.stark.swagger.support.CustomModelAttributeParameterExpander;
+import com.stark.swagger.support.oauth2.OperationSelectors;
 import org.apache.commons.collections4.IterableUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,36 +18,19 @@ import org.springframework.cloud.netflix.zuul.filters.ZuulProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.config.WebFluxConfigurer;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
-import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
-import org.springframework.web.server.WebFilterChain;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-import com.stark.swagger.boot.properties.GatewayExtentionProperties;
-import com.stark.swagger.boot.properties.SwaggerProperties;
-import com.stark.swagger.support.CustomModelAttributeParameterExpander;
-import com.stark.swagger.support.oauth2.OperationSelectors;
-
-import reactor.core.publisher.Mono;
-import springfox.documentation.builders.ApiInfoBuilder;
-import springfox.documentation.builders.AuthorizationCodeGrantBuilder;
-import springfox.documentation.builders.OAuthBuilder;
-import springfox.documentation.builders.PathSelectors;
-import springfox.documentation.builders.RequestHandlerSelectors;
+import springfox.documentation.builders.*;
+import springfox.documentation.schema.ScalarType;
 import springfox.documentation.schema.property.bean.AccessorsProvider;
 import springfox.documentation.schema.property.field.FieldProvider;
-import springfox.documentation.service.ApiInfo;
-import springfox.documentation.service.AuthorizationScope;
-import springfox.documentation.service.Contact;
-import springfox.documentation.service.GrantType;
-import springfox.documentation.service.ResourceOwnerPasswordCredentialsGrant;
-import springfox.documentation.service.SecurityReference;
-import springfox.documentation.service.SecurityScheme;
+import springfox.documentation.service.*;
 import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spi.schema.EnumTypeDeterminer;
 import springfox.documentation.spi.service.contexts.SecurityContext;
@@ -60,6 +40,11 @@ import springfox.documentation.swagger.web.SecurityConfiguration;
 import springfox.documentation.swagger.web.SecurityConfigurationBuilder;
 import springfox.documentation.swagger.web.SwaggerResource;
 import springfox.documentation.swagger.web.SwaggerResourcesProvider;
+
+import javax.annotation.Nonnull;
+import java.net.URI;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Swagger 自动配置。
@@ -80,12 +65,13 @@ public class SwaggerAutoConfig {
 		
 		@Bean
 		public Docket createRestApi() {
-			return new Docket(DocumentationType.SWAGGER_2)
+			Docket docket = new Docket(DocumentationType.SWAGGER_2)
 					.apiInfo(apiInfo(swaggerProperties))
 					.select()
 					.apis(RequestHandlerSelectors.basePackage(swaggerProperties.getBasePackage()))
 					.paths(PathSelectors.any())
 					.build();
+			return wrapDocket(docket, swaggerProperties);
 		}
 		
 	}
@@ -105,14 +91,15 @@ public class SwaggerAutoConfig {
 		
 		@Bean
 		public Docket createRestApi() {
-			return new Docket(DocumentationType.SWAGGER_2)
+			Docket docket = new Docket(DocumentationType.SWAGGER_2)
 					.apiInfo(apiInfo(swaggerProperties))
 					.select()
 					.apis(RequestHandlerSelectors.basePackage(swaggerProperties.getBasePackage()))
 					.paths(PathSelectors.any())
 					.build()
-					.securitySchemes(Arrays.asList(oauth()))
-					.securityContexts(Arrays.asList(securityContext()));
+					.securitySchemes(Collections.singletonList(oauth()))
+					.securityContexts(Collections.singletonList(securityContext()));
+			return wrapDocket(docket, swaggerProperties);
 		}
 		
 		@Bean
@@ -143,7 +130,7 @@ public class SwaggerAutoConfig {
 			}
 			return new OAuthBuilder()
 					.name("oauth2")
-					.grantTypes(Arrays.asList(grantType))
+					.grantTypes(Collections.singletonList(grantType))
 					.scopes(oauth2Scopes(swaggerProperties))
 					.build();
 		}
@@ -153,12 +140,12 @@ public class SwaggerAutoConfig {
 			SecurityReference securityReference = SecurityReference
 	                .builder()
 	                .reference("oauth2")
-	                .scopes(scopes.toArray(new AuthorizationScope[scopes.size()]))
+	                .scopes(scopes.toArray(new AuthorizationScope[0]))
 	                .build();
 			return SecurityContext
 					.builder()
-					.securityReferences(Arrays.asList(securityReference))
-					.operationSelector(context -> operationSelectors != null ? operationSelectors.match(context) : true)
+					.securityReferences(Collections.singletonList(securityReference))
+					.operationSelector(context -> operationSelectors == null || operationSelectors.match(context))
 					.build();
 		}
 		
@@ -193,7 +180,7 @@ public class SwaggerAutoConfig {
 			return new WebMvcConfigurer() {
 				
 				@Override
-				public void addViewControllers(ViewControllerRegistry registry) {
+				public void addViewControllers(@Nonnull ViewControllerRegistry registry) {
 					registry.addRedirectViewController("/", "/swagger-ui/index.html");
 					registry.addRedirectViewController("/index", "/swagger-ui/index.html");
 				}
@@ -234,7 +221,7 @@ public class SwaggerAutoConfig {
 			return new WebMvcConfigurer() {
 				
 				@Override
-				public void addResourceHandlers(org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
+				public void addResourceHandlers(@Nonnull org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
 					registry
 						.addResourceHandler(zuulProperties.getPrefix() + "/swagger-ui/**")
 						.addResourceLocations("classpath:/META-INF/resources/webjars/springfox-swagger-ui/")
@@ -242,7 +229,7 @@ public class SwaggerAutoConfig {
 				}
 				
 				@Override
-				public void addViewControllers(ViewControllerRegistry registry) {
+				public void addViewControllers(@Nonnull ViewControllerRegistry registry) {
 					registry.addViewController(zuulProperties.getPrefix() + "/swagger-ui/index.html").setViewName("forward:/swagger-ui/index.html");
 					registry.addViewController(zuulProperties.getPrefix() + "/swagger-resources").setViewName("forward:/swagger-resources");
 					registry.addViewController(zuulProperties.getPrefix() + "/swagger-resources/configuration/ui").setViewName("forward:/swagger-resources/configuration/ui");
@@ -297,44 +284,40 @@ public class SwaggerAutoConfig {
 			return new WebFluxConfigurer() {
 				
 				@Override
-				public void addResourceHandlers(org.springframework.web.reactive.config.ResourceHandlerRegistry registry) {
+				public void addResourceHandlers(@Nonnull org.springframework.web.reactive.config.ResourceHandlerRegistry registry) {
 					registry
 						.addResourceHandler(StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "") + "/swagger-ui/**")
 						.addResourceLocations("classpath:/META-INF/resources/webjars/springfox-swagger-ui/")
 						.resourceChain(false);
-				};
+				}
 			};
 		}
 		
 		@Bean
 		public WebFilter gatewaySwaggerFilter() {
-			return new WebFilter() {
-				
-				@Override
-				public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
-					String path = exchange.getRequest().getURI().getPath();
-					String[] swaggerUris = new String[] {
-							"/swagger-ui/index.html",
-							"/swagger-resources",
-							"/swagger-resources/configuration/ui",
-							"/swagger-resources/configuration/security",
-							"/v2/api-docs",
-							"/v3/api-docs"
-					};
-					
-					String forwardUri = null;
-					String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
-					for (String swaggerUri : swaggerUris) {
-						if (path.equals(prefix + swaggerUri)) {
-							forwardUri = swaggerUri;
-							break;
-						}
+			return (exchange, chain) -> {
+				String path = exchange.getRequest().getURI().getPath();
+				String[] swaggerUris = new String[] {
+						"/swagger-ui/index.html",
+						"/swagger-resources",
+						"/swagger-resources/configuration/ui",
+						"/swagger-resources/configuration/security",
+						"/v2/api-docs",
+						"/v3/api-docs"
+				};
+
+				String forwardUri = null;
+				String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
+				for (String swaggerUri : swaggerUris) {
+					if (path.equals(prefix + swaggerUri)) {
+						forwardUri = swaggerUri;
+						break;
 					}
-					if (forwardUri != null) {
-						return chain.filter(exchange.mutate().request(exchange.getRequest().mutate().path(forwardUri).build()).build());
-				    }
-				    return chain.filter(exchange);
 				}
+				if (forwardUri != null) {
+					return chain.filter(exchange.mutate().request(exchange.getRequest().mutate().path(forwardUri).build()).build());
+				}
+				return chain.filter(exchange);
 			};
 		}
 		
@@ -401,6 +384,23 @@ public class SwaggerAutoConfig {
 				swaggerProperties.getContactName(),
 				swaggerProperties.getContactUrl(),
 				swaggerProperties.getContactEmail());
+	}
+
+	private static Docket wrapDocket(Docket docket, SwaggerProperties swaggerProperties) {
+		if (StringUtils.isNotBlank(swaggerProperties.getReferer())) {
+			RequestParameter parameter = new RequestParameterBuilder()
+					.name(StringUtils.defaultIfBlank(swaggerProperties.getRefererName(), HttpHeaders.REFERER))
+					.in(ParameterType.HEADER)
+					.hidden(true)
+					.required(true)
+					.query(param -> param
+							.model(model -> model.scalarModel(ScalarType.STRING))
+							.defaultValue(swaggerProperties.getReferer())
+					)
+					.build();
+			docket.globalRequestParameters(Collections.singletonList(parameter));
+		}
+		return docket;
 	}
 	
 }

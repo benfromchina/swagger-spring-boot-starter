@@ -1,15 +1,14 @@
 package com.stark.swagger.boot.properties;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.springframework.boot.context.properties.ConfigurationProperties;
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import springfox.documentation.service.ApiInfo;
 import springfox.documentation.service.VendorExtension;
+
+import java.util.Collections;
+import java.util.List;
 
 /**
  * Swagger 配置参数。
@@ -60,6 +59,12 @@ public class SwaggerProperties {
 	
 	/** 是否将首页重定向到 swagger 接口文档页，默认 false */
 	private boolean indexRedirect;
+
+	/** Referer 请求头 */
+	private String referer;
+
+	/** Referer 请求头参数名 */
+	private String refererName;
 	
 	/** 适用于 zuul 的 swagger 接口收集器配置项 */
 	private ZuulSwaggerProperties zuul = new ZuulSwaggerProperties();
@@ -92,7 +97,7 @@ public class SwaggerProperties {
 		private String clientSecret;
 		
 		/** 授权作用域 */
-		private List<AuthorizationScopeProperties> scopes = Arrays.asList(
+		private List<AuthorizationScopeProperties> scopes = Collections.singletonList(
 				new AuthorizationScopeProperties("all", "所有权限")
 		);
 
