@@ -31,12 +31,13 @@ public class SwaggerPaths {
     public static String[] createSwaggerPatterns(SpringdocProperties springdocProperties, GatewayProperties gatewayProperties, GatewayExtentionProperties gatewayExtentionProperties) {
         List<String> list = new ArrayList<>();
         if (springdocProperties.isIndexRedirect()) {
-            String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
+            String prefix = gatewayExtentionProperties.getPrefix();
             list.add(prefix);
             list.add(prefix + "/");
             list.add(prefix + "/index");
             list.add(prefix + "/swagger-ui/**");
-            list.add(prefix + "/v3/api-docs/**");
+            list.add("/v3/api-docs/**");
+            list.add("/webjars/**");
         }
         gatewayProperties.getRoutes().forEach(route -> {
             PredicateDefinition pathPredicate = route.getPredicates()
@@ -53,6 +54,7 @@ public class SwaggerPaths {
                     list.add(path + "/");
                     list.add(path + "/swagger-ui/**");
                     list.add(path + "/v3/api-docs/**");
+                    list.add("/" + route.getId() + "/v3/api-docs");
                 }
             }
         });

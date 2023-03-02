@@ -1,6 +1,8 @@
 package com.stark.swagger.boot.properties;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import org.springdoc.core.properties.SwaggerUiOAuthProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.LinkedHashMap;
@@ -33,6 +35,9 @@ public class SpringdocProperties {
 
 	/** Referer 请求头参数名 */
 	private String refererName;
+
+	/** Swagger UI 配置 */
+	private SwaggerUiProperties swaggerUi = new SwaggerUiProperties();
 
 	/** 适用于 Gateway 的 swagger 接口收集器配置项 */
 	private GatewaySwaggerProperties gateway = new GatewaySwaggerProperties();
@@ -127,6 +132,40 @@ public class SpringdocProperties {
 		/** swagger 源的 service-id 正则表达式，默认空即所有 */
 		private String serviceIdRegex;
 		
+	}
+
+	@Data
+	public static class SwaggerUiProperties {
+
+		private SwaggerOAuthProperties oauth = new SwaggerOAuthProperties();
+
+	}
+
+	/**
+	 * swagger oauth 配置参数。
+	 */
+	@Data
+	@EqualsAndHashCode(callSuper = true)
+	public static class SwaggerOAuthProperties extends SwaggerUiOAuthProperties {
+
+		/** 是否开启，默认 false */
+		private boolean enabled;
+
+		/** 授权类型 */
+		private AuthorizationGrantType grantType;
+
+		/** 获取 token 链接地址 */
+		private String tokenUrl;
+
+		/** 认证链接地址 */
+		private String authorizationUrl;
+
+	}
+
+	public enum AuthorizationGrantType {
+
+		AUTHORIZATION_CODE, PASSWORD
+
 	}
 	
 }

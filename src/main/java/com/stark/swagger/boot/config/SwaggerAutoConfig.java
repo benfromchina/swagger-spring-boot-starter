@@ -15,6 +15,7 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.media.StringSchema;
 import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.security.*;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Resource;
 import org.apache.commons.lang3.StringUtils;
@@ -22,12 +23,13 @@ import org.springdoc.core.models.GroupedOpenApi;
 import org.springdoc.core.properties.AbstractSwaggerUiConfigProperties;
 import org.springdoc.core.properties.SwaggerUiConfigProperties;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.gateway.route.RouteDefinition;
 import org.springframework.cloud.gateway.route.RouteDefinitionLocator;
 import org.springframework.context.annotation.Bean;
@@ -123,9 +125,11 @@ public class SwaggerAutoConfig {
 	@EnableConfigurationProperties(GatewayExtentionProperties.class)
 	protected static class GatewaySwaggerConfig {
 
-		@Autowired
+		@Resource
+		private DiscoveryClient discoveryClient;
+		@Resource
 		private GatewayExtentionProperties gatewayExtentionProperties;
-		@Autowired
+		@Resource
 		private SpringdocProperties swaggerProperties;
 
 		@Bean
@@ -134,7 +138,7 @@ public class SwaggerAutoConfig {
 				String path = exchange.getRequest().getURI().getPath();
 				String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
 				if (path.startsWith(prefix + "/swagger-ui")) {
-					String forwardUri = "/webjars/" + StringUtils.substringAfter(path, prefix);
+					String forwardUri = "/webjars" + StringUtils.substringAfter(path, prefix);
 					return chain.filter(exchange.mutate().request(exchange.getRequest().mutate().path(forwardUri).build()).build());
 				}
 				return chain.filter(exchange);
@@ -157,6 +161,7 @@ public class SwaggerAutoConfig {
 			if (CollectionUtils.isEmpty(definitions)) {
 				return List.of();
 			}
+
 			Set<AbstractSwaggerUiConfigProperties.SwaggerUrl> urls = definitions
 					.stream()
 					.filter(route -> StringUtils.isBlank(swaggerProperties.getGateway().getServiceIdRegex()) || route.getId().matches(swaggerProperties.getGateway().getServiceIdRegex()))
@@ -164,28 +169,26 @@ public class SwaggerAutoConfig {
 						String serviceId = route.getId().startsWith("ReactiveCompositeDiscoveryClient_")
 								? StringUtils.substringAfter(route.getId(), "ReactiveCompositeDiscoveryClient_")
 								: route.getId();
-						String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
 						AbstractSwaggerUiConfigProperties.SwaggerUrl uri = new AbstractSwaggerUiConfigProperties.SwaggerUrl();
 						uri.setName(serviceId);
-						uri.setUrl(prefix + "/v3/api-docs/" + serviceId);
+						uri.setUrl("/" + serviceId + "/v3/api-docs");
 						return uri;
 					}).collect(Collectors.toSet());
 			swaggerUiConfigProperties.setUrls(urls);
 			return List.of();
 		}
 
-		@ConditionalOnProperty(name = "spring.cloud.gateway.prefix")
 		@Bean
 		public RouterFunction<ServerResponse> apiDocsRouter() {
 			String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
 			ObjectMapper objectMapper = new ObjectMapper();
 
 			return RouterFunctions.route()
-					.GET(prefix + "/v3/api-docs/{serviceId}", request -> {
+					.GET("/{serviceId}/v3/api-docs", request -> {
 						String serviceId = request.pathVariable("serviceId");
-						String url = request.uri().toString();
-						url = StringUtils.substringBefore(url, prefix);
-						url += "/" + serviceId + "/v3/api-docs";
+						String URL = StringUtils.substringBefore(request.uri().toString(), prefix);
+						List<ServiceInstance> instances = discoveryClient.getInstances(serviceId);
+						String url = instances.get(0).getUri().toString() + "/v3/api-docs";
 						Mono<String> result = WebClient.create().get()
 								.uri(url)
 								.retrieve()
@@ -198,6 +201,7 @@ public class SwaggerAutoConfig {
 										} catch (JsonProcessingException e) {
 											throw new RuntimeException(e);
 										}
+
 										JsonNode paths = root.get("paths");
 										Iterator<String> iter = paths.fieldNames();
 										Map<String, JsonNode> map = new LinkedHashMap<>();
@@ -210,6 +214,10 @@ public class SwaggerAutoConfig {
 											node.remove(key);
 											node.set(prefix + key, value);
 										});
+
+										JsonNode servers = root.get("servers");
+										servers.forEach(server -> ((ObjectNode) server).put("url", URL));
+
 										try {
 											json = objectMapper.writeValueAsString(root);
 										} catch (JsonProcessingException e) {
@@ -227,13 +235,10 @@ public class SwaggerAutoConfig {
 
 	@SuppressWarnings("unchecked")
 	private static OpenAPI createOpenApi(SpringdocProperties springdocProperties) {
-		Info info = new Info();
-		BeanUtils.copyProperties(springdocProperties.getInfo(), info);
-		ExternalDocumentation externalDocs = new ExternalDocumentation();
-		BeanUtils.copyProperties(springdocProperties.getExternalDocs(), externalDocs);
 		OpenAPI openApi = new OpenAPI()
 				.info(createInfo(springdocProperties))
 				.externalDocs(createExternalDocs(springdocProperties));
+		Components components = null;
 		if (StringUtils.isNotBlank(springdocProperties.getReferer())) {
 			String key = StringUtils.defaultIfBlank(springdocProperties.getRefererName(), HttpHeaders.REFERER);
 
@@ -241,9 +246,40 @@ public class SwaggerAutoConfig {
 					.in(ParameterIn.HEADER.toString())
 					.required(true)
 					.schema(new StringSchema().name(key)._default(springdocProperties.getReferer()));
-			openApi.components(new Components().addParameters(key, refererHeader));
+			components = new Components().addParameters(key, refererHeader);
 		}
-		return openApi;
+		if (springdocProperties.getSwaggerUi().getOauth().isEnabled()) {
+			SpringdocProperties.SwaggerOAuthProperties oauth = springdocProperties.getSwaggerUi().getOauth();
+			if (components == null) {
+				components = new Components();
+			}
+			SpringdocProperties.AuthorizationGrantType grantType = oauth.getGrantType() != null
+					? oauth.getGrantType()
+					: SpringdocProperties.AuthorizationGrantType.PASSWORD;
+			Scopes scopes = new Scopes();
+			oauth.getScopes().forEach(scope -> scopes.addString(scope, ""));
+			if (SpringdocProperties.AuthorizationGrantType.PASSWORD.equals(grantType)) {
+				components.addSecuritySchemes("password", new SecurityScheme()
+						.type(SecurityScheme.Type.OAUTH2)
+						.flows(new OAuthFlows().password(new OAuthFlow()
+								.tokenUrl(oauth.getTokenUrl())
+								.authorizationUrl(oauth.getAuthorizationUrl())
+								.scopes(scopes))));
+				openApi.addSecurityItem(new SecurityRequirement().addList("password"));
+			} else if (SpringdocProperties.AuthorizationGrantType.AUTHORIZATION_CODE.equals(grantType)) {
+				components.addSecuritySchemes("authorization_code", new SecurityScheme()
+						.type(SecurityScheme.Type.OAUTH2)
+						.flows(new OAuthFlows().authorizationCode(new OAuthFlow()
+								.tokenUrl(oauth.getTokenUrl())
+								.authorizationUrl(oauth.getAuthorizationUrl())
+								.scopes(scopes))));
+				openApi.addSecurityItem(new SecurityRequirement().addList("authorization_code"));
+			}
+		}
+		if (components != null) {
+			openApi.components(components);
+		}
+ 		return openApi;
 	}
 
 	private static Info createInfo(SpringdocProperties springdocProperties) {
