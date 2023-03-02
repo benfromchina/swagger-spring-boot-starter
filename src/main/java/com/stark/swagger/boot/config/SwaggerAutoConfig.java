@@ -18,6 +18,7 @@ import io.swagger.v3.oas.models.parameters.Parameter;
 import io.swagger.v3.oas.models.security.*;
 import jakarta.annotation.Nonnull;
 import jakarta.annotation.Resource;
+import org.apache.commons.collections4.IterableUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springdoc.core.models.GroupedOpenApi;
 import org.springdoc.core.properties.AbstractSwaggerUiConfigProperties;
@@ -30,6 +31,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.cloud.gateway.config.GatewayProperties;
+import org.springframework.cloud.gateway.handler.predicate.PredicateDefinition;
 import org.springframework.cloud.gateway.route.RouteDefinition;
 import org.springframework.cloud.gateway.route.RouteDefinitionLocator;
 import org.springframework.context.annotation.Bean;
@@ -128,6 +131,8 @@ public class SwaggerAutoConfig {
 		@Resource
 		private DiscoveryClient discoveryClient;
 		@Resource
+		private GatewayProperties gatewayProperties;
+		@Resource
 		private GatewayExtentionProperties gatewayExtentionProperties;
 		@Resource
 		private SpringdocProperties swaggerProperties;
@@ -183,10 +188,28 @@ public class SwaggerAutoConfig {
 			String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
 			ObjectMapper objectMapper = new ObjectMapper();
 
+			Map<String, String> pathMap = new LinkedHashMap<>();
+			gatewayProperties.getRoutes().forEach(route -> {
+				PredicateDefinition pathPredicate = route.getPredicates()
+						.stream()
+						.filter(predicateDefinition -> predicateDefinition.getName().equals("Path"))
+						.findAny()
+						.orElse(null);
+				if (pathPredicate != null) {
+					Collection<String> args = pathPredicate.getArgs().values();
+					String path = IterableUtils.get(args, 0);
+					if (StringUtils.isBlank(swaggerProperties.getGateway().getServiceIdRegex()) || route.getId().matches(swaggerProperties.getGateway().getServiceIdRegex())) {
+						path = StringUtils.substringBeforeLast(path, "/**");
+						pathMap.put(route.getId(), path);
+					}
+				}
+			});
+
 			return RouterFunctions.route()
 					.GET("/{serviceId}/v3/api-docs", request -> {
 						String serviceId = request.pathVariable("serviceId");
-						String URL = StringUtils.substringBefore(request.uri().toString(), prefix);
+						String path = pathMap.get(serviceId);
+						String URL = StringUtils.substringBefore(request.uri().toString(), prefix) + path;
 						List<ServiceInstance> instances = discoveryClient.getInstances(serviceId);
 						String url = instances.get(0).getUri().toString() + "/v3/api-docs";
 						Mono<String> result = WebClient.create().get()
@@ -201,19 +224,6 @@ public class SwaggerAutoConfig {
 										} catch (JsonProcessingException e) {
 											throw new RuntimeException(e);
 										}
-
-										JsonNode paths = root.get("paths");
-										Iterator<String> iter = paths.fieldNames();
-										Map<String, JsonNode> map = new LinkedHashMap<>();
-										while (iter.hasNext()) {
-											String key = iter.next();
-											map.put(key, paths.get(key));
-										}
-										map.forEach((key, value) -> {
-											ObjectNode node = (ObjectNode) paths;
-											node.remove(key);
-											node.set(prefix + key, value);
-										});
 
 										JsonNode servers = root.get("servers");
 										servers.forEach(server -> ((ObjectNode) server).put("url", URL));
