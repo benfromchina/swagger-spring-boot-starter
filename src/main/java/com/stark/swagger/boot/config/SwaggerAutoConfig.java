@@ -185,7 +185,6 @@ public class SwaggerAutoConfig {
 
 		@Bean
 		public RouterFunction<ServerResponse> apiDocsRouter() {
-			String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
 			ObjectMapper objectMapper = new ObjectMapper();
 
 			Map<String, String> pathMap = new LinkedHashMap<>();
@@ -209,7 +208,7 @@ public class SwaggerAutoConfig {
 					.GET("/{serviceId}/v3/api-docs", request -> {
 						String serviceId = request.pathVariable("serviceId");
 						String path = pathMap.get(serviceId);
-						String URL = StringUtils.substringBefore(request.uri().toString(), prefix) + path;
+						String URL = StringUtils.substringBefore(request.uri().toString(), "/" + serviceId) + path;
 						List<ServiceInstance> instances = discoveryClient.getInstances(serviceId);
 						String url = instances.get(0).getUri().toString() + "/v3/api-docs";
 						Mono<String> result = WebClient.create().get()
