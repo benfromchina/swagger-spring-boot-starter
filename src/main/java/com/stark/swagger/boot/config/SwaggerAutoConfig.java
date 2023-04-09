@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.stark.swagger.boot.properties.GatewayExtentionProperties;
 import com.stark.swagger.boot.properties.SpringdocProperties;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.models.Components;
@@ -28,19 +27,20 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication.Type;
+import org.springframework.boot.autoconfigure.web.reactive.WebFluxProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.ServiceInstance;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.gateway.config.GatewayProperties;
+import org.springframework.cloud.gateway.filter.FilterDefinition;
 import org.springframework.cloud.gateway.handler.predicate.PredicateDefinition;
 import org.springframework.cloud.gateway.route.RouteDefinition;
-import org.springframework.cloud.gateway.route.RouteDefinitionLocator;
+import org.springframework.cloud.gateway.support.NotFoundException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.util.CollectionUtils;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
@@ -66,7 +66,7 @@ public class SwaggerAutoConfig {
 
 	@Configuration
 	protected static class SwaggerConfig {
-		
+
 		@Resource
 		private SpringdocProperties springdocProperties;
 
@@ -84,18 +84,18 @@ public class SwaggerAutoConfig {
 		public OpenAPI openApi() {
 			return createOpenApi(springdocProperties);
 		}
-		
+
 	}
-	
+
 	@Configuration
 	@ConditionalOnWebApplication(type = Type.SERVLET)
 	protected static class SwaggerWebMvcConfig {
-		
+
 		@Bean
 		@ConditionalOnProperty(prefix = "springdoc", name = "index-redirect", havingValue = "true")
 		public WebMvcConfigurer starkSwaggerWebMvcConfigurer() {
 			return new WebMvcConfigurer() {
-				
+
 				@Override
 				public void addViewControllers(@Nonnull ViewControllerRegistry registry) {
 					registry.addRedirectViewController("/", "/swagger-ui/index.html");
@@ -103,106 +103,80 @@ public class SwaggerAutoConfig {
 				}
 			};
 		}
-		
+
 	}
-	
+
 	@Configuration
 	@ConditionalOnWebApplication(type = Type.REACTIVE)
 	protected static class SwaggerWebFluxConfig {
-		
+
 		@Bean
 		@ConditionalOnProperty(prefix = "springdoc", name = "index-redirect", havingValue = "true")
-		public RouterFunction<ServerResponse> swaggerIndexRouter() {
+		public RouterFunction<ServerResponse> swaggerIndexRouter(WebFluxProperties webFluxProperties) {
+			String basePath = StringUtils.defaultString(webFluxProperties.getBasePath());
 			return RouterFunctions.route()
-					.GET("/", request -> ServerResponse.temporaryRedirect(URI.create("/swagger-ui/index.html")).build())
-					.GET("/index", request -> ServerResponse.temporaryRedirect(URI.create("/swagger-ui/index.html")).build())
+					.GET("", request -> ServerResponse.temporaryRedirect(URI.create(basePath + "/swagger-ui/index.html")).build())
+					.GET("/", request -> ServerResponse.temporaryRedirect(URI.create(basePath + "/swagger-ui/index.html")).build())
+					.GET("/index", request -> ServerResponse.temporaryRedirect(URI.create(basePath + "/swagger-ui/index.html")).build())
 					.build();
 		}
 
 	}
-	
+
 	@Configuration
 	@ConditionalOnWebApplication(type = Type.REACTIVE)
 	@ConditionalOnClass(name = "org.springframework.cloud.gateway.config.GatewayProperties")
 	@ConditionalOnProperty(prefix = "springdoc.gateway", name = "enabled", havingValue = "true")
-	@EnableConfigurationProperties(GatewayExtentionProperties.class)
 	protected static class GatewaySwaggerConfig {
 
-		@Resource
-		private DiscoveryClient discoveryClient;
-		@Resource
-		private GatewayProperties gatewayProperties;
-		@Resource
-		private GatewayExtentionProperties gatewayExtentionProperties;
-		@Resource
-		private SpringdocProperties swaggerProperties;
-
 		@Bean
-		public WebFilter gatewaySwaggerFilter() {
+		public WebFilter gatewaySwaggerFilter(WebFluxProperties webFluxProperties) {
 			return (exchange, chain) -> {
 				String path = exchange.getRequest().getURI().getPath();
-				String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
-				if (path.startsWith(prefix + "/swagger-ui")) {
-					String forwardUri = "/webjars" + StringUtils.substringAfter(path, prefix);
+				String basePath = StringUtils.defaultString(webFluxProperties.getBasePath());
+				if (path.startsWith(basePath + "/swagger-ui")) {
+					String forwardUri = basePath + "/webjars" + StringUtils.substringAfter(path, basePath);
 					return chain.filter(exchange.mutate().request(exchange.getRequest().mutate().path(forwardUri).build()).build());
 				}
 				return chain.filter(exchange);
 			};
 		}
-		
+
 		@Bean
-		public RouterFunction<ServerResponse> gatewaySwaggerIndexRouter() {
-			String prefix = StringUtils.defaultIfBlank(gatewayExtentionProperties.getPrefix(), "");
+		public RouterFunction<ServerResponse> gatewaySwaggerIndexRouter(WebFluxProperties webFluxProperties) {
+			String basePath = StringUtils.defaultString(webFluxProperties.getBasePath());
 			return RouterFunctions.route()
-					.GET(prefix, request -> ServerResponse.temporaryRedirect(URI.create(prefix + "/swagger-ui/index.html")).build())
-					.GET(prefix + "/", request -> ServerResponse.temporaryRedirect(URI.create(prefix + "/swagger-ui/index.html")).build())
+					.GET("", request -> ServerResponse.temporaryRedirect(URI.create(basePath + "/swagger-ui/index.html")).build())
+					.GET("/", request -> ServerResponse.temporaryRedirect(URI.create(basePath + "/swagger-ui/index.html")).build())
+					.GET("/index", request -> ServerResponse.temporaryRedirect(URI.create(basePath + "/swagger-ui/index.html")).build())
 					.build();
 		}
-		
+
 		@Bean
 		@Lazy(false)
-		public List<GroupedOpenApi> apis(RouteDefinitionLocator locator, SwaggerUiConfigProperties swaggerUiConfigProperties) {
-			List<RouteDefinition> definitions = locator.getRouteDefinitions().collectList().block();
-			if (CollectionUtils.isEmpty(definitions)) {
-				return List.of();
-			}
-
-			Set<AbstractSwaggerUiConfigProperties.SwaggerUrl> urls = definitions
+		public List<GroupedOpenApi> apis(GatewayProperties gatewayProperties, SpringdocProperties swaggerProperties, SwaggerUiConfigProperties swaggerUiConfigProperties) {
+			Set<AbstractSwaggerUiConfigProperties.SwaggerUrl> urls = gatewayProperties.getRoutes()
 					.stream()
 					.filter(route -> StringUtils.isBlank(swaggerProperties.getGateway().getServiceIdRegex()) || route.getId().matches(swaggerProperties.getGateway().getServiceIdRegex()))
 					.map(route -> {
-						String serviceId = route.getId().startsWith("ReactiveCompositeDiscoveryClient_")
-								? StringUtils.substringAfter(route.getId(), "ReactiveCompositeDiscoveryClient_")
-								: route.getId();
 						AbstractSwaggerUiConfigProperties.SwaggerUrl uri = new AbstractSwaggerUiConfigProperties.SwaggerUrl();
-						uri.setName(serviceId);
-						uri.setUrl("/" + serviceId + "/v3/api-docs");
+						uri.setName(route.getId());
+						uri.setUrl(route.getId() + "/v3/api-docs");
 						return uri;
-					}).collect(Collectors.toSet());
+					})
+					.collect(Collectors.toSet());
 			swaggerUiConfigProperties.setUrls(urls);
 			return List.of();
 		}
 
 		@Bean
-		public RouterFunction<ServerResponse> apiDocsRouter() {
+		public RouterFunction<ServerResponse> apiDocsRouter(GatewayProperties gatewayProperties, SpringdocProperties swaggerProperties, DiscoveryClient discoveryClient) {
 			ObjectMapper objectMapper = new ObjectMapper();
 
-			Map<String, String> pathMap = new LinkedHashMap<>();
-			gatewayProperties.getRoutes().forEach(route -> {
-				PredicateDefinition pathPredicate = route.getPredicates()
-						.stream()
-						.filter(predicateDefinition -> predicateDefinition.getName().equals("Path"))
-						.findAny()
-						.orElse(null);
-				if (pathPredicate != null) {
-					Collection<String> args = pathPredicate.getArgs().values();
-					String path = IterableUtils.get(args, 0);
-					if (StringUtils.isBlank(swaggerProperties.getGateway().getServiceIdRegex()) || route.getId().matches(swaggerProperties.getGateway().getServiceIdRegex())) {
-						path = StringUtils.substringBeforeLast(path, "/**");
-						pathMap.put(route.getId(), path);
-					}
-				}
-			});
+			Map<String, String> pathMap = gatewayProperties.getRoutes()
+					.stream()
+					.filter(route -> StringUtils.isBlank(swaggerProperties.getGateway().getServiceIdRegex()) || route.getId().matches(swaggerProperties.getGateway().getServiceIdRegex()))
+					.collect(Collectors.toMap(RouteDefinition::getId, this::getRoutePath));
 
 			return RouterFunctions.route()
 					.GET("/{serviceId}/v3/api-docs", request -> {
@@ -238,6 +212,32 @@ public class SwaggerAutoConfig {
 						return ServerResponse.ok().contentType(MediaType.APPLICATION_JSON).body(result, String.class);
 					})
 					.build();
+		}
+
+		private String getRoutePath(RouteDefinition route) {
+			PredicateDefinition pathPredicate = route.getPredicates()
+					.stream()
+					.filter(predicateDefinition -> predicateDefinition.getName().equals("Path"))
+					.findAny()
+					.orElse(null);
+			if (pathPredicate != null) {
+				Collection<String> args = pathPredicate.getArgs().values();
+				String path = IterableUtils.get(args, 0);
+				path = StringUtils.substringBeforeLast(path, "/**");
+
+				FilterDefinition stripBasePathFiter = route.getFilters()
+						.stream()
+						.filter(filter -> "StripBasePath".equals(filter.getName()))
+						.findFirst()
+						.orElse(null);
+				if (stripBasePathFiter != null) {
+					int index = path.indexOf("/", 1);
+					path = path.substring(index);
+				}
+
+				return path;
+			}
+			throw new NotFoundException("PathPatternPredicate not found");
 		}
 
 	}
@@ -288,7 +288,7 @@ public class SwaggerAutoConfig {
 		if (components != null) {
 			openApi.components(components);
 		}
- 		return openApi;
+		return openApi;
 	}
 
 	private static Info createInfo(SpringdocProperties springdocProperties) {
