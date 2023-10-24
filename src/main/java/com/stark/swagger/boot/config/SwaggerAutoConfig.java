@@ -51,7 +51,10 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
-import java.util.*;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -170,7 +173,7 @@ public class SwaggerAutoConfig {
 		}
 
 		@Bean
-		public RouterFunction<ServerResponse> apiDocsRouter(GatewayProperties gatewayProperties, SpringdocProperties swaggerProperties, DiscoveryClient discoveryClient) {
+		public RouterFunction<ServerResponse> apiDocsRouter(WebFluxProperties webFluxProperties, GatewayProperties gatewayProperties, SpringdocProperties swaggerProperties, DiscoveryClient discoveryClient) {
 			ObjectMapper objectMapper = new ObjectMapper();
 
 			Map<String, String> pathMap = gatewayProperties.getRoutes()
@@ -180,11 +183,19 @@ public class SwaggerAutoConfig {
 
 			return RouterFunctions.route()
 					.GET("/{serviceId}/v3/api-docs", request -> {
+						String basePath = StringUtils.defaultString(webFluxProperties.getBasePath());
+						String host = StringUtils.defaultString(request.headers().firstHeader("Host"));
+						if (host.endsWith(":80")) {
+							host = StringUtils.substringBefore(host, ":80");
+						}
 						String serviceId = request.pathVariable("serviceId");
 						String path = pathMap.get(serviceId);
-						String URL = StringUtils.substringBefore(request.uri().toString(), "/" + serviceId) + path;
+						String URL = StringUtils.isNotBlank(host)
+								? StringUtils.substringBefore(request.uri().toString(), "://") + "://" + host + basePath + path
+								: StringUtils.substringBefore(request.uri().toString(), "/" + serviceId) + path;
+
 						List<ServiceInstance> instances = discoveryClient.getInstances(serviceId);
-						String url = instances.get(0).getUri().toString() + "/v3/api-docs";
+						String url = instances.get(0).getUri().toString() + "/v3/api-docs/default";
 						Mono<String> result = WebClient.create().get()
 								.uri(url)
 								.retrieve()
