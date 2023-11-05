@@ -1,5 +1,5 @@
-[![](https://img.shields.io/badge/Maven%20Central-v1.0.2-brightgreen)](https://search.maven.org/artifact/io.github.benfromchina/swagger-spring-boot-starter/1.0.2/jar)
-[![](https://img.shields.io/badge/Release-v1.0.2-blue)](https://gitee.com/jarvis-lib/swagger-spring-boot-starter/releases/v1.0.2)
+[![](https://img.shields.io/badge/Maven%20Central-v2.0.0-brightgreen)](https://search.maven.org/artifact/io.github.benfromchina/swagger-spring-boot-starter/2.0.0/jar)
+[![](https://img.shields.io/badge/Release-v2.0.0-blue)](https://gitee.com/jarvis-lib/swagger-spring-boot-starter/releases/v2.0.0)
 [![](https://img.shields.io/badge/License-Apache--2.0-9cf)](https://www.apache.org/licenses/LICENSE-2.0.html)
 
 # 目录
@@ -34,11 +34,23 @@
 
 1. pom.xml 中引入依赖
 
+- jdk17 以下使用 1.0 版本
+
 ```xml
 <dependency>
     <groupId>io.github.benfromchina</groupId>
     <artifactId>swagger-spring-boot-starter</artifactId>
     <version>1.0.2</version>
+</dependency>
+```
+
+- jdk17 及以上使用 2.0 版本
+
+```xml
+<dependency>
+    <groupId>io.github.benfromchina</groupId>
+    <artifactId>swagger-spring-boot-starter</artifactId>
+    <version>2.0.0</version>
 </dependency>
 ```
 
