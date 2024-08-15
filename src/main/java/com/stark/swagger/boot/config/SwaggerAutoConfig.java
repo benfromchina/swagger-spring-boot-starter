@@ -41,6 +41,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
@@ -196,7 +197,11 @@ public class SwaggerAutoConfig {
 
 						List<ServiceInstance> instances = discoveryClient.getInstances(serviceId);
 						String url = instances.get(0).getUri().toString() + "/v3/api-docs/default";
-						Mono<String> result = WebClient.create().get()
+						int bufferSize = 2 * 1024 * 1024; // 2 MB
+						ExchangeStrategies strategies = ExchangeStrategies.builder()
+								.codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(bufferSize))
+								.build();
+						Mono<String> result = WebClient.builder().exchangeStrategies(strategies).build().get()
 								.uri(url)
 								.retrieve()
 								.bodyToMono(String.class)
